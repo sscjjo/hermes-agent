@@ -890,9 +890,17 @@ def _apply_primary_runtime_fields(agent, rt: Dict[str, Any]) -> None:
     agent.model = rt["model"]
     agent.provider = rt["provider"]
     agent.requested_provider = rt.get("requested_provider", agent.provider)
-    agent.base_url = rt["base_url"]           # setter updates _base_url_lower
-    from hermes_cli.providers import is_actual_route
-    agent.api_mode = "chat_completions" if is_actual_route(agent.provider, agent.base_url) else rt["api_mode"]
+    # MiniMax China is an Anthropic Messages-compatible endpoint. Some upgraded gateway sessions can
+    # carry an OpenAI-compatible /v1 runtime snapshot from older versions, and the generic actual-route
+    # restore below then keeps forcing chat_completions. Normalize this provider before rebuilding the
+    # client so recovered turns cannot drift back to /v1/chat/completions.
+    if str(rt.get("provider") or "").strip().lower() == "minimax-cn":
+        agent.base_url = "https://api.minimax.cn/anthropic"
+        agent.api_mode = "anthropic_messages"
+    else:
+        agent.base_url = rt["base_url"]           # setter updates _base_url_lower
+        from hermes_cli.providers import is_actual_route
+        agent.api_mode = "chat_completions" if is_actual_route(agent.provider, agent.base_url) else rt["api_mode"]
     if hasattr(agent, "_transport_cache"):
         agent._transport_cache.clear()
     agent.api_key = rt["api_key"]
